@@ -1,0 +1,30 @@
+{
+  "editor.codeActionsOnSave": {
+    "source.organizeImports.biome": "explicit"
+  },
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.formatOnSave": true,
+  "cSpell.words": [
+    "AITEST",
+    "Aliyun",
+    "aweme",
+    "bbox",
+    "bytedance",
+    "deepseek",
+    "doubao",
+    "douyin",
+    "fkill",
+    "httpbin",
+    "iconfont",
+    "modelcontextprotocol",
+    "openrouter",
+    "qwen",
+    "taobao",
+    "targetcreated",
+    "Volcengine",
+    "Yadb"
+  ],
+  "[jsonc]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  }
+}
