@@ -22,7 +22,7 @@ export default defineConfig({
     node: {
       source: {
         entry: {
-          worker: './src/scripts/worker.ts',
+          worker: './src/scripts/worker.js',
           'stop-water-flow': './src/scripts/stop-water-flow.ts',
           'water-flow': './src/scripts/water-flow.ts',
         },

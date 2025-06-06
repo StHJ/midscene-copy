@@ -369,12 +369,12 @@ export async function callInsureMo(
 
   // 4. 发送请求
   debugCall(
-    `sending request to https://portal.insuremo.com/api/ai-qa-service/api/vl`,
+    `sending request to https://portal.insuremo.com/api/mo-re/aiqa/api/vl`,
   );
 
   try {
     const response = await axios.post(
-      'https://portal.insuremo.com/api/ai-qa-service/api/vl',
+      'https://portal.insuremo.com/api/mo-re/aiqa/api/vl',
       formData,
       {
         headers: {

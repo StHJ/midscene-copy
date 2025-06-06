@@ -7,18 +7,14 @@
 
 import type { WebKeyInput } from '@/common/page';
 import { limitOpenNewTabScript } from '@/common/ui-utils';
-import type { AbstractPage, ChromePageDestroyOptions } from '@/page';
+import type { AbstractPage } from '@/page';
 import type { ElementTreeNode, Point, Size } from '@midscene/core';
 import type { ElementInfo } from '@midscene/shared/extractor';
 import { treeToList } from '@midscene/shared/extractor';
 import { assert } from '@midscene/shared/utils';
 import type { Protocol as CDPTypes } from 'devtools-protocol';
 import { CdpKeyboard } from './cdpInput';
-import {
-  getHtmlElementScript,
-  injectStopWaterFlowAnimation,
-  injectWaterFlowAnimation,
-} from './dynamic-scripts';
+import { getHtmlElementScript, injectStopWaterFlowAnimation, injectWaterFlowAnimation } from './dynamic-scripts';
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -371,7 +367,13 @@ export default class ChromeExtensionProxyPage implements AbstractPage {
       format: 'jpeg',
       quality: 90,
     });
-    return new Blob([blob], { type: 'image/jpeg' });
+    const byteCharacters = atob(blob.data); // 解码 base64
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: 'image/jpeg' });
   }
 
   async url() {

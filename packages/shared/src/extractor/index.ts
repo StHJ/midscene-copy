@@ -29,3 +29,5 @@ export { extractTextWithPosition as clientExtractTextWithPosition } from './clie
 export { extractTreeNode as webExtractNodeTree } from './web-extractor';
 
 export { extractTreeNodeAsString as webExtractNodeTreeAsString } from './web-extractor';
+
+export { generateElementByPosition } from './dom-util';

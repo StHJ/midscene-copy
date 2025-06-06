@@ -1,11 +1,12 @@
-import type { ElementInfo } from '.';
 import {
   CONTAINER_MINI_HEIGHT,
   CONTAINER_MINI_WIDTH,
   NodeType,
 } from '../constants/index';
+import type { WebElementInfo } from '../types';
 import type { Point } from '../types';
 import {
+  isAElement,
   isButtonElement,
   isContainerElement,
   isFormElement,
@@ -14,6 +15,7 @@ import {
 } from './dom-util';
 import { descriptionOfTree } from './tree';
 import {
+  elementRect,
   getNodeAttributes,
   getPseudoElementContent,
   getRect,
@@ -22,14 +24,7 @@ import {
   midsceneGenerateHash,
   setDataForNode,
   setDebugMode,
-  visibleRect,
 } from './util';
-
-interface WebElementInfo extends ElementInfo {
-  zoom: number;
-  screenWidth?: number;
-  screenHeight?: number;
-}
 
 let indexId = 0;
 
@@ -47,21 +42,33 @@ function tagNameOfNode(node: globalThis.Node): string {
   return tagName ? `<${tagName}>` : '';
 }
 
-function collectElementInfo(
+export function collectElementInfo(
   node: Node,
   currentWindow: typeof window,
   currentDocument: typeof document,
   baseZoom = 1,
   basePoint: Point = { left: 0, top: 0 },
-): WebElementInfo | null {
-  const rect = visibleRect(node, currentWindow, currentDocument, baseZoom);
+  visibleOnly = true,
+): WebElementInfo | null | any {
+  const rect = elementRect(
+    node,
+    currentWindow,
+    currentDocument,
+    baseZoom,
+    visibleOnly,
+  );
+
+  if (!rect) {
+    return null;
+  }
+
   if (
-    !rect ||
-    rect.width < CONTAINER_MINI_WIDTH ||
-    rect.height < CONTAINER_MINI_HEIGHT
+    visibleOnly &&
+    (rect.width < CONTAINER_MINI_WIDTH || rect.height < CONTAINER_MINI_HEIGHT)
   ) {
     return null;
   }
+
   if (basePoint.left !== 0 || basePoint.top !== 0) {
     rect.left += basePoint.left;
     rect.top += basePoint.top;
@@ -72,56 +79,75 @@ function collectElementInfo(
     return null;
   }
 
-  if (isFormElement(node)) {
-    const attributes = getNodeAttributes(node, currentWindow);
-    let valueContent =
-      attributes.value || attributes.placeholder || node.textContent || '';
-    const nodeHashId = midsceneGenerateHash(node, valueContent, rect);
-    const selector = setDataForNode(node, nodeHashId, false, currentWindow);
-    const tagName = (node as HTMLElement).tagName.toLowerCase();
-    if ((node as HTMLElement).tagName.toLowerCase() === 'select') {
-      // Get the selected option using the selectedIndex property
-      const selectedOption = (node as HTMLSelectElement).options[
-        (node as HTMLSelectElement).selectedIndex
-      ];
+  console.error('node.textContent', node);
+  if (node == undefined || node == null) {
+    return null;
+  }
+  // console.error('node.textContent', node.textContent);
 
-      // Retrieve the text content of the selected option
-      valueContent = selectedOption.textContent || '';
-    }
+  try {
+    if (isFormElement(node)) {
+      const attributes = getNodeAttributes(node, currentWindow);
+      let valueContent =
+        attributes.value || attributes.placeholder || node.textContent || '';
+      const nodeHashId = midsceneGenerateHash(node, valueContent, rect);
+      const selector = setDataForNode(node, nodeHashId, false, currentWindow);
+      const tagName = (node as HTMLElement).tagName.toLowerCase();
+      if ((node as HTMLElement).tagName.toLowerCase() === 'select') {
+        // Get the selected option using the selectedIndex property
+        const selectedOption = (node as HTMLSelectElement).options[
+          (node as HTMLSelectElement).selectedIndex
+        ];
 
-    if (
-      ((node as HTMLElement).tagName.toLowerCase() === 'input' ||
-        (node as HTMLElement).tagName.toLowerCase() === 'textarea') &&
-      (node as HTMLInputElement).value
-    ) {
-      valueContent = (node as HTMLInputElement).value;
-    }
+        // Retrieve the text content of the selected option
+        valueContent = selectedOption.textContent || '';
+      }
 
-    const elementInfo: WebElementInfo = {
-      id: nodeHashId,
-      nodeHashId,
-      locator: selector,
-      nodeType: NodeType.FORM_ITEM,
-      indexId: indexId++,
-      attributes: {
-        ...attributes,
-        htmlTagName: `<${tagName}>`,
+      if (
+        ((node as HTMLElement).tagName.toLowerCase() === 'input' ||
+          (node as HTMLElement).tagName.toLowerCase() === 'textarea') &&
+        (node as HTMLInputElement).value
+      ) {
+        valueContent = (node as HTMLInputElement).value;
+      }
+
+      const elementInfo: WebElementInfo = {
+        id: nodeHashId,
+        nodeHashId,
+        locator: selector,
         nodeType: NodeType.FORM_ITEM,
-      },
-      content: valueContent.trim(),
-      rect,
-      center: [
-        Math.round(rect.left + rect.width / 2),
-        Math.round(rect.top + rect.height / 2),
-      ],
-      zoom: rect.zoom,
-      screenWidth: currentWindow.innerWidth,
-      screenHeight: currentWindow.innerHeight,
-    };
-    return elementInfo;
+        indexId: indexId++,
+        attributes: {
+          ...attributes,
+          htmlTagName: `<${tagName}>`,
+          nodeType: NodeType.FORM_ITEM,
+        },
+        content: valueContent.trim(),
+        rect,
+        center: [
+          Math.round(rect.left + rect.width / 2),
+          Math.round(rect.top + rect.height / 2),
+        ],
+        zoom: rect.zoom,
+      };
+      return elementInfo;
+    }
+  } catch (error) {
+    console.error('get node error');
+    return null;
   }
 
   if (isButtonElement(node)) {
+    const rect = mergeElementAndChildrenRects(
+      node,
+      currentWindow,
+      currentDocument,
+      baseZoom,
+      visibleOnly,
+    );
+    if (!rect) {
+      return null;
+    }
     const attributes = getNodeAttributes(node, currentWindow);
     const pseudo = getPseudoElementContent(node, currentWindow);
     const content = node.innerText || pseudo.before || pseudo.after || '';
@@ -145,8 +171,6 @@ function collectElementInfo(
         Math.round(rect.top + rect.height / 2),
       ],
       zoom: rect.zoom,
-      screenWidth: currentWindow.innerWidth,
-      screenHeight: currentWindow.innerHeight,
     };
     return elementInfo;
   }
@@ -164,8 +188,8 @@ function collectElementInfo(
         ...attributes,
         ...(node.nodeName.toLowerCase() === 'svg'
           ? {
-              svgContent: 'true',
-            }
+            svgContent: 'true',
+          }
           : {}),
         nodeType: NodeType.IMG,
         htmlTagName: tagNameOfNode(node),
@@ -178,8 +202,6 @@ function collectElementInfo(
         Math.round(rect.top + rect.height / 2),
       ],
       zoom: rect.zoom,
-      screenWidth: currentWindow.innerWidth,
-      screenHeight: currentWindow.innerHeight,
     };
     return elementInfo;
   }
@@ -211,12 +233,37 @@ function collectElementInfo(
         Math.round(rect.left + rect.width / 2),
         Math.round(rect.top + rect.height / 2),
       ],
-      // attributes,
       content: text,
       rect,
       zoom: rect.zoom,
-      screenWidth: currentWindow.innerWidth,
-      screenHeight: currentWindow.innerHeight,
+    };
+    return elementInfo;
+  }
+
+  if (isAElement(node)) {
+    const attributes = getNodeAttributes(node, currentWindow);
+    const pseudo = getPseudoElementContent(node, currentWindow);
+    const content = node.innerText || pseudo.before || pseudo.after || '';
+    const nodeHashId = midsceneGenerateHash(node, content, rect);
+    const selector = setDataForNode(node, nodeHashId, false, currentWindow);
+    const elementInfo: WebElementInfo = {
+      id: nodeHashId,
+      indexId: indexId++,
+      nodeHashId,
+      nodeType: NodeType.A,
+      locator: selector,
+      attributes: {
+        ...attributes,
+        htmlTagName: tagNameOfNode(node),
+        nodeType: NodeType.A,
+      },
+      content,
+      rect,
+      center: [
+        Math.round(rect.left + rect.width / 2),
+        Math.round(rect.top + rect.height / 2),
+      ],
+      zoom: rect.zoom,
     };
     return elementInfo;
   }
@@ -244,8 +291,6 @@ function collectElementInfo(
         Math.round(rect.top + rect.height / 2),
       ],
       zoom: rect.zoom,
-      screenWidth: currentWindow.innerWidth,
-      screenHeight: currentWindow.innerHeight,
     };
     return elementInfo;
   }
@@ -334,11 +379,12 @@ export function extractTreeNode(
       node: elementInfo,
       children: [],
     };
-    // stop collecting if the node is a Button or Image
+    // stop collecting if the node is a Button/Image/Text/A/FormItem/Container
     if (
       elementInfo?.nodeType === NodeType.BUTTON ||
       elementInfo?.nodeType === NodeType.IMG ||
       elementInfo?.nodeType === NodeType.TEXT ||
+      elementInfo?.nodeType === NodeType.A ||
       elementInfo?.nodeType === NodeType.FORM_ITEM ||
       elementInfo?.nodeType === NodeType.CONTAINER
     ) {
@@ -400,5 +446,58 @@ export function extractTreeNode(
   return {
     node: null,
     children: topChildren,
+  };
+}
+
+export function mergeElementAndChildrenRects(
+  node: Node,
+  currentWindow: typeof window,
+  currentDocument: typeof document,
+  baseZoom = 1,
+  visibleOnly = true,
+) {
+  const selfRect = elementRect(
+    node,
+    currentWindow,
+    currentDocument,
+    baseZoom,
+    visibleOnly,
+  );
+  if (!selfRect) return null;
+
+  let minLeft = selfRect.left;
+  let minTop = selfRect.top;
+  let maxRight = selfRect.left + selfRect.width;
+  let maxBottom = selfRect.top + selfRect.height;
+
+  function traverse(child: Node) {
+    for (let i = 0; i < child.childNodes.length; i++) {
+      const sub = child.childNodes[i];
+      if (sub.nodeType === 1) {
+        const rect = elementRect(
+          sub,
+          currentWindow,
+          currentDocument,
+          baseZoom,
+          visibleOnly,
+        );
+        if (rect) {
+          minLeft = Math.min(minLeft, rect.left);
+          minTop = Math.min(minTop, rect.top);
+          maxRight = Math.max(maxRight, rect.left + rect.width);
+          maxBottom = Math.max(maxBottom, rect.top + rect.height);
+        }
+        traverse(sub);
+      }
+    }
+  }
+  traverse(node);
+
+  return {
+    ...selfRect,
+    left: minLeft,
+    top: minTop,
+    width: maxRight - minLeft,
+    height: maxBottom - minTop,
   };
 }

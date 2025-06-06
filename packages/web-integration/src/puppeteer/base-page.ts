@@ -95,12 +95,23 @@ export class Page<
   }
 
   async getElementsNodeTree() {
-    // ref: packages/web-integration/src/playwright/ai-fixture.ts popup logic
-    // During test execution, a new page might be opened through a connection, and the page remains confined to the same page instance.
-    // The page may go through opening, closing, and reopening; if the page is closed, evaluate may return undefined, which can lead to errors.
+    for (let i = 0; i < 3; i++) {
+      try {
+        await this.waitForNavigation();
+        const scripts = await getExtraReturnLogic(true);
+        assert(scripts, 'scripts should be set before writing report in browser');
+
+        const captureElementSnapshot = await this.evaluate(scripts);
+        return captureElementSnapshot as ElementTreeNode<ElementInfo>;
+      } catch (error) {
+        if (i === 3 - 1) throw error;
+        await sleep(1000); // 等待1秒后重试
+      }
+    }
     await this.waitForNavigation();
     const scripts = await getExtraReturnLogic(true);
     assert(scripts, 'scripts should be set before writing report in browser');
+
     const captureElementSnapshot = await this.evaluate(scripts);
     return captureElementSnapshot as ElementTreeNode<ElementInfo>;
   }
